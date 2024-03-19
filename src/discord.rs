@@ -1,8 +1,6 @@
-use crate::message::Message;
+use crate::inter_comm::InterComm;
 use poise::serenity_prelude as serenity;
-use serenity::all::ChannelId;
-use serenity::builder::EditChannel;
-use std::ops::Deref;
+use std::env::var;
 use tokio::sync::mpsc::Receiver;
 use tracing::info;
 
@@ -10,7 +8,9 @@ use tracing::info;
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, (), Error>;
 
-pub async fn run(token: String, receiver: Receiver<Message>) -> Result<(), Error> {
+pub async fn run(receiver: Receiver<InterComm>) -> Result<(), Error> {
+    let discord_token = var("DISCORD_TOKEN").expect("Missing DISCORD_TOKEN");
+
     let intents =
         serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT;
 
@@ -30,7 +30,7 @@ pub async fn run(token: String, receiver: Receiver<Message>) -> Result<(), Error
         })
         .build();
 
-    let mut client = serenity::ClientBuilder::new(token, intents)
+    let mut client = serenity::ClientBuilder::new(discord_token, intents)
         .framework(framework)
         .await?;
 
@@ -60,13 +60,13 @@ async fn event_handler(
 #[poise::command(slash_command)]
 async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     ctx.say("Pong !").await?;
-    
+
     // let id = ChannelId::new(883418664777437227);
-    // 
+    //
     // let builder = EditChannel::new()
     //     .name("EN LIVE")
     //     .topic("✞ Eniram ✞ est en stream");
-    // 
+    //
     // ctx.http()
     //     .edit_channel(id, &builder, Some("Twitch event"))
     //     .await?;

@@ -3,7 +3,8 @@ pub enum MessageType {
     TwitchStreamOffline,
 }
 
-pub struct Message {
+pub struct InterComm {
     pub message_type: MessageType,
-    pub streamer: String,
+    pub streamer_user_id: String,
+    pub streamer_user_login: String,
 }
