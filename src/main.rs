@@ -31,10 +31,10 @@ async fn main() {
     )
     .expect("Error while parsing config file");
 
-    let (tx, rx) = mpsc::channel::<InterComm>(32);
+    let (tx, mut rx) = mpsc::channel::<InterComm>(32);
 
-    let (_) = join!(
-        // discord::run(rx),
-        twitch::websocket::run(tx, config.twitch_watcher)
+    let (_, _) = join!(
+        discord::run(rx, &config),
+        twitch::websocket::run(tx, &config.twitch_watcher)
     );
 }

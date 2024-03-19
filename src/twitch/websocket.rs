@@ -15,7 +15,7 @@ use twitch_api::types::{UserId, UserName};
 use twitch_api::{eventsub, HelixClient};
 use twitch_oauth2::UserToken;
 
-pub async fn run(sender: Sender<InterComm>, config: TwitchWatcher) -> anyhow::Result<()> {
+pub async fn run(sender: Sender<InterComm>, config: &TwitchWatcher) -> anyhow::Result<()> {
     let twitch_client: HelixClient<_> = HelixClient::with_client(
         <reqwest::Client>::default_client_with_name(Some("samousse-rs".parse()?))?,
     );
@@ -34,9 +34,6 @@ pub async fn run(sender: Sender<InterComm>, config: TwitchWatcher) -> anyhow::Re
     };
 
     ws.run().await?;
-    // let ws_client = tokio::spawn(async move {ws.run().await});
-    //
-    // tokio::try_join!(ws_client)?.0.unwrap();
 
     Ok(())
 }
@@ -82,16 +79,15 @@ impl WebsocketClient {
         loop {
             tokio::select!(
                 Some(msg) = futures::StreamExt::next(&mut s) => {
-                    let span = debug_span!("Received message", raw_message= ?msg);
                     let msg = match msg {
                         Err(tungstenite::Error::Protocol(tungstenite::error::ProtocolError::ResetWithoutClosingHandshake)) => {
                             warn!("connection was sent an unexpected frame or was reset, reestablishing it");
-                            s = self.connect().instrument(span).await.context("when reestablishing connection")?;
+                            s = self.connect().await.context("when reestablishing connection")?;
                             continue;
                         }
                         _=> msg.context("when getting message")?,
                     };
-                    self.process_message(msg).instrument(span).await?
+                    self.process_message(msg).await?
                 }
                 else => {
                     warn!("Twitch websocket loop exited, waiting before restart");
@@ -162,7 +158,10 @@ impl WebsocketClient {
                     EventsubWebsocketData::Keepalive {
                         metadata: _,
                         payload: _,
-                    } => Ok(()),
+                    } => {
+                        trace!("Received keepalive");
+                        Ok(())
+                    }
                     _ => Ok(()),
                 }
             }
@@ -209,6 +208,11 @@ impl WebsocketClient {
                 .await?;
         }
         info!("welcome message sent");
+        self.handle_streamer_online(
+            UserId::new(String::from("1234")),
+            UserName::new(String::from("username")),
+        )
+        .await?;
         Ok(())
     }
 
