@@ -1,5 +1,6 @@
 /target
 .env
-config.json5
+config.json
 *.json
 sample
+*.xlsx

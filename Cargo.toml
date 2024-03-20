@@ -12,10 +12,9 @@ tokio = { version = "1.36.0", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 twitch_api = { version = "0.7.0-rc.7", features = ["eventsub", "helix", "reqwest", "hmac", "deny_unknown_fields"] }
-reqwest = { version = "0.11.26", features = ["json"] }
+reqwest = { version = "0.11.27", features = ["json"] }
 url = "2.5.0"
 serde = "1.0.197"
-json5 = "0.4.1"
 anyhow = "1.0.81"
 tungstenite = "0.21.0"
 tokio-tungstenite = "0.21.0"

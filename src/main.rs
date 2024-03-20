@@ -25,16 +25,16 @@ async fn main() {
         .init();
     debug!("We are in debug mode");
 
-    let config = json5::from_str::<Config>(
-        &fs::read_to_string(var("CONFIG_PATH").unwrap_or(String::from("./config.json5")))
+    let config = serde_json::from_str::<Config>(
+        &fs::read_to_string(var("CONFIG_PATH").unwrap_or(String::from("./config.json")))
             .expect("Error while reading config file"),
     )
     .expect("Error while parsing config file");
 
-    let (tx, mut rx) = mpsc::channel::<InterComm>(32);
+    let (tx, rx) = mpsc::channel::<InterComm>(32);
 
-    let (_, _) = join!(
-        discord::run(rx, &config),
-        twitch::websocket::run(tx, &config.twitch_watcher)
+    let (_) = join!(
+        discord::run(tx.clone(), rx, &config),
+        //twitch::websocket::run(tx, &config.twitch_watcher)
     );
 }
