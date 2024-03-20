@@ -1417,6 +1417,7 @@ dependencies = [
  "dotenvy",
  "futures",
  "poise",
+ "rand",
  "reqwest",
  "rpassword",
  "serde",

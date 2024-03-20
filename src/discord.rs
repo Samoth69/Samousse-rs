@@ -1,8 +1,9 @@
 use crate::config::Config;
 use crate::inter_comm::{InterComm, MessageType};
 use anyhow::anyhow;
-use poise::samples::on_error;
+use poise::builtins::on_error;
 use poise::serenity_prelude as serenity;
+use rand::seq::SliceRandom;
 use serenity::all::{Activity, ActivityData, ChannelId, GuildId, UserId};
 use serenity::builder::EditChannel;
 use std::collections::HashMap;
@@ -22,6 +23,7 @@ struct Data {
     pub twitch: Arc<RwLock<DiscordTwitchWatcher>>,
     pub sender: Mutex<Sender<InterComm>>,
     pub receiver: Mutex<Option<Receiver<InterComm>>>,
+    pub activity_messages: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -86,7 +88,7 @@ pub async fn run(
             event_handler: |ctx, event, framework, _| {
                 Box::pin(event_handler(ctx, event, framework))
             },
-            commands: vec![ping(), status(), mark_as_streaming()],
+            commands: vec![ping(), echo(), status(), mark_as_streaming()],
             on_error: |error| {
                 Box::pin(async move {
                     if let Err(e) = on_error(error).await {
@@ -129,6 +131,7 @@ pub async fn run(
                     })),
                     receiver: Mutex::new(Some(receiver)),
                     sender: Mutex::new(sender),
+                    activity_messages: config.activity_messages,
                 })
             })
         })
@@ -152,8 +155,14 @@ async fn event_handler(
         serenity::FullEvent::Ready { data_about_bot, .. } => {
             info!("Logged in as {}", data_about_bot.user.name);
 
-            // TODO there is a lot of potential here
-            ctx.set_activity(Some(ActivityData::custom("Oui vasi ouioui")));
+            ctx.set_activity(
+                framework
+                    .user_data
+                    .activity_messages
+                    .choose(&mut rand::thread_rng())
+                    .map(|m| Some(ActivityData::custom(m)))
+                    .unwrap_or(None),
+            );
 
             let receiver = framework.user_data.receiver.lock().await.take();
             let twitch = framework.user_data.twitch.clone();
@@ -232,16 +241,16 @@ async fn handle_stream_event(
     is_streaming: bool,
 ) -> anyhow::Result<()> {
     let mut discord_user_id: Option<UserId> = None;
-    // write lock
+    match twitch
+        .write()
+        .await
+        .find_user_by_twitch_id_mut(streamer_user_id)
     {
-        let mut data = twitch.write().await;
-        match data.find_user_by_twitch_id_mut(streamer_user_id) {
-            Some(u) => {
-                u.twitch_is_streaming = Some(is_streaming);
-                discord_user_id = Some(u.discord_id);
-            }
-            None => warn!("Unknown user {:?} from twitch side", streamer_user_id),
+        Some(u) => {
+            u.twitch_is_streaming = Some(is_streaming);
+            discord_user_id = Some(u.discord_id);
         }
+        None => warn!("Unknown user {:?} from twitch side", streamer_user_id),
     }
     if let Some(discord_user_id) = discord_user_id {
         rename_channel(ctx, twitch, &discord_user_id, is_streaming).await?;
@@ -381,17 +390,12 @@ async fn is_trusted(ctx: Context<'_>) -> Result<bool, Error> {
 #[poise::command(slash_command)]
 async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     ctx.say("pong !").await?;
+    Ok(())
+}
 
-    // let id = ChannelId::new(883418664777437227);
-    //
-    // let builder = EditChannel::new()
-    //     .name("EN LIVE")
-    //     .topic("✞ Eniram ✞ est en stream");
-    //
-    // ctx.http()
-    //     .edit_channel(id, &builder, Some("Twitch event"))
-    //     .await?;
-
+#[poise::command(slash_command)]
+async fn echo(ctx: Context<'_>, message: String) -> Result<(), Error> {
+    ctx.say(message).await?;
     Ok(())
 }
 
