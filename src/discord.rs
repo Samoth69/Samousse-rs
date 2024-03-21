@@ -9,7 +9,6 @@ use tokio::sync::{Mutex, RwLock};
 use crate::inter_comm::InterComm;
 
 pub mod bot;
-mod cache;
 
 // Types used by all command functions
 type Error = Box<dyn std::error::Error + Send + Sync>;
