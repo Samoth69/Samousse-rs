@@ -1,11 +1,12 @@
-use anyhow::anyhow;
-use reqwest::{header, StatusCode};
-use serde::{Deserialize, Serialize};
 use std::env::var;
 use std::fmt::Error;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
+
+use anyhow::anyhow;
+use reqwest::{header, StatusCode};
+use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
 #[derive(Serialize, Deserialize, Debug)]
