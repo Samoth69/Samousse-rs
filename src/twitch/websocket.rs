@@ -212,6 +212,7 @@ impl WebsocketClient {
         // ---------------------------------------------------------------------------
         // We find what event we already have a sub for
         // ---------------------------------------------------------------------------
+        // https://github.com/twitch-rs/twitch_api/issues/400
         let subs: Vec<EventSubSubscription> = self
             .client
             .get_eventsub_subscriptions(None, None, None, &token)
@@ -226,6 +227,7 @@ impl WebsocketClient {
             .try_flatten()
             .try_collect()
             .await?;
+        // let subs: Vec<EventSubSubscription> = vec![];
 
         debug!("There are {} subs on twitch api side", subs.len());
 
@@ -265,6 +267,11 @@ impl WebsocketClient {
                         )
             }) {
                 item.event_id = Some(sub.id);
+            } else {
+                debug!("deleting old sub {}", sub.id);
+                self.client
+                    .delete_eventsub_subscription(sub.id, &token)
+                    .await?;
             }
         }
 

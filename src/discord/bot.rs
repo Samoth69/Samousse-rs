@@ -130,6 +130,7 @@ async fn event_handler(
                 Some(user) => {
                     user.has_been_part_of_voice_state_event = true;
                     user.current_channel_id = new.channel_id;
+                    
                 }
                 None => trace!("User {} isn't monitored", new.user_id),
             }
@@ -216,9 +217,6 @@ async fn find_current_user_voice_channel(
     twitch: Arc<RwLock<DiscordTwitchWatcher>>,
     discord_user_id: &UserId,
 ) -> anyhow::Result<Option<ChannelId>> {
-    // trace!("Before read lock");
-    // let mut data = twitch.write().await;
-    // trace!("Read lock acquired");
     let mut ret: Option<ChannelId> = None;
     if let Some(user) = twitch.read().await.users.get(discord_user_id) {
         if user.has_been_part_of_voice_state_event {
@@ -263,14 +261,16 @@ async fn get_channel_new_name<'a>(
         find_current_user_voice_channel(ctx, twitch.clone(), discord_user_id).await?
     {
         trace!("Channel id {} found in data", channel_id);
+        // will be true if the channel has already been renamed
+        let channel_has_been_renamed = twitch.read().await.channels.contains_key(&channel_id);
         if twitch
             .read()
             .await
             .find_user_in_channel(channel_id)
             .iter()
-            .filter(|f| f.twitch_is_streaming.is_some_and(|a| a))
+            .filter(|f| f.twitch_is_streaming.is_some_and(|a| a) && channel_has_been_renamed)
             .count()
-            > 1
+            >= 1
         {
             debug!("We do not change channel name, more than one streamer are in this channel");
             return Ok(None);
