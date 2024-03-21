@@ -33,8 +33,8 @@ async fn main() {
 
     let (tx, rx) = mpsc::channel::<InterComm>(32);
 
-    let (_) = join!(
+    let (_, _) = join!(
         discord::bot::run(tx.clone(), rx, &config),
-        //twitch::websocket::run(tx, &config.twitch_watcher)
+        twitch::websocket::run(tx, &config.twitch_watcher)
     );
 }

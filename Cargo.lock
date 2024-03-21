@@ -1521,6 +1521,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_ignored"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8e319a36d1b52126a0d608f24e93b2d81297091818cd70625fcf50a15d84ddf"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "serde_json"
 version = "1.0.114"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2061,11 +2070,13 @@ dependencies = [
  "once_cell",
  "reqwest",
  "serde",
+ "serde_ignored",
  "serde_json",
  "serde_path_to_error",
  "sha2",
  "thiserror",
  "tower",
+ "tracing",
  "twitch_oauth2",
  "twitch_types",
  "url",

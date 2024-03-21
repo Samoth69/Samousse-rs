@@ -120,11 +120,11 @@ async fn event_handler(
             if new_message.author.bot {
                 trace!("Skipping message sent by bot {}", new_message.author.name);
             } else {
-                debug!("Received message {:?}", new_message);
+                trace!("Received message {:?}", new_message);
             }
         }
         serenity::FullEvent::VoiceStateUpdate { old, new } => {
-            info!("VoiceStateUpdate {:?} -> {:?}", old, new);
+            trace!("VoiceStateUpdate {:?} -> {:?}", old, new);
             let mut data = framework.user_data.twitch.write().await;
             match data.users.get_mut(&new.user_id) {
                 Some(user) => {
@@ -190,8 +190,16 @@ async fn handle_stream_event(
         .find_user_by_twitch_id_mut(streamer_user_id)
     {
         Some(u) => {
-            u.twitch_is_streaming = Some(is_streaming);
             discord_user_id = Some(u.discord_id);
+            if u.twitch_is_streaming != Some(is_streaming) {
+                u.twitch_is_streaming = Some(is_streaming);
+            } else {
+                debug!(
+                    "Discord user {} twitch streaming status hasn't changed",
+                    u.discord_id
+                );
+                return Ok(());
+            }
         }
         None => warn!("Unknown user {:?} from twitch side", streamer_user_id),
     }
@@ -208,30 +216,40 @@ async fn find_current_user_voice_channel(
     twitch: Arc<RwLock<DiscordTwitchWatcher>>,
     discord_user_id: &UserId,
 ) -> anyhow::Result<Option<ChannelId>> {
+    // trace!("Before read lock");
+    // let mut data = twitch.write().await;
+    // trace!("Read lock acquired");
+    let mut ret: Option<ChannelId> = None;
     if let Some(user) = twitch.read().await.users.get(discord_user_id) {
         if user.has_been_part_of_voice_state_event {
-            return Ok(user.current_channel_id);
+            ret = user.current_channel_id;
         } else {
-            // TODO fix this
             debug!("searching user current voice channel slow way");
-            trace!("Before read lock");
-            let data = twitch.read().await;
-            trace!("Read lock acquired");
-            for server in data.servers.iter() {
+            for server in twitch.read().await.servers.iter() {
                 if let Some(guild) = ctx.cache.guild(*server) {
                     if let Some(streamer) = guild.voice_states.get(&user.discord_id) {
-                        return Ok(streamer.channel_id);
+                        ret = streamer.channel_id;
                     }
                 }
             }
         }
     }
 
-    debug!(
-        "Discord user {} not found in voice channel",
-        discord_user_id
-    );
-    Ok(None)
+    if let Some(channel_id) = ret {
+        if let Some(user) = twitch.write().await.users.get_mut(discord_user_id) {
+            user.has_been_part_of_voice_state_event = true;
+            user.current_channel_id = Some(channel_id);
+        } else {
+            warn!("Discord user {} doesn't exist", discord_user_id);
+        }
+    } else {
+        debug!(
+            "Discord user {} not found in voice channel",
+            discord_user_id
+        );
+    }
+
+    Ok(ret)
 }
 
 async fn get_channel_new_name<'a>(
