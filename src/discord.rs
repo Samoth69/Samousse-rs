@@ -9,8 +9,9 @@ use tokio::sync::{Mutex, RwLock};
 use crate::inter_comm::InterComm;
 
 pub mod bot;
-mod twitch;
+mod message_response;
 mod random_stuff;
+mod twitch;
 
 // Types used by all command functions
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -23,8 +24,8 @@ struct Data {
     pub sender: Mutex<Sender<InterComm>>,
     pub receiver: Mutex<Option<Receiver<InterComm>>>,
     pub activity_messages: Vec<String>,
-    pub question_answers: Vec<String>,
-    pub random_answers: Vec<String>,
+    pub question_answers: Arc<Vec<String>>,
+    pub random_answers: Arc<Vec<String>>,
 }
 
 #[derive(Debug)]

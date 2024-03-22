@@ -11,6 +11,7 @@ use tokio::sync::{Mutex, RwLock};
 use tracing::{error, info, trace};
 
 use crate::config::Config;
+use crate::discord::message_response::handle_message;
 use crate::discord::random_stuff::{echo, ping, random_number};
 use crate::discord::twitch::{
     rename_channel, status, twitch_event_handler, update_streaming_status,
@@ -83,8 +84,8 @@ pub async fn run(
                     receiver: Mutex::new(Some(receiver)),
                     sender: Mutex::new(sender),
                     activity_messages: config.activity_messages,
-                    question_answers: config.question_answers,
-                    random_answers: config.random_answers,
+                    question_answers: Arc::new(config.question_answers),
+                    random_answers: Arc::new(config.random_answers),
                 })
             })
         })
@@ -133,6 +134,16 @@ async fn event_handler(
                 trace!("Skipping message sent by bot {}", new_message.author.name);
             } else {
                 trace!("Received message {:?}", new_message);
+                if let Err(why) = handle_message(
+                    ctx,
+                    framework.user_data.question_answers.clone(),
+                    framework.user_data.random_answers.clone(),
+                    new_message,
+                )
+                .await
+                {
+                    error!("Error on handling message {}", why);
+                }
             }
         }
         serenity::FullEvent::VoiceStateUpdate { old, new } => {

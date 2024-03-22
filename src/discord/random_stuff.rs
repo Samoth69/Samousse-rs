@@ -34,7 +34,7 @@ pub async fn echo(ctx: DiscordContext<'_>, message: String) -> Result<(), Error>
 #[poise::command(
     slash_command,
     description_localized(
-        "en",
+        "en-US",
         "Generate a random number between provided numbers (min and max included)"
     ),
     description_localized(
