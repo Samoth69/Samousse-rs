@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: samousse-pvc
+  namespace: samousse
+spec:
+  storageClassName: sc-lvm
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 128Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: samousse
+  namespace: samousse
+spec:
+  selector:
+    matchLabels:
+      app: samousse
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: samousse
+    spec:
+      volumes:
+        - name: samousse-vol-config
+          configMap:
+            name: samousse-config
+            items:
+              - key: config.json
+                path: config.json
+        - name: samousse-vol
+          persistentVolumeClaim:
+            claimName: samousse-pvc
+      imagePullSecrets:
+        - name: regcred
+      initContainers:
+        - name: init-volume
+          image: alpine:3
+          command: [ "sh", "-c", "chown -R root:root /cache && chmod 700 /cache" ]
+          volumeMounts:
+            - mountPath: "/cache"
+              name: samousse-vol
+      containers:
+        - name: samousse
+          image: gitlab-registry.k3s.samoth.eu/github/samousse-rs/app:0.1.0
+          env:
+            - name: RUST_LOG
+              value: info
+            - name: TWITCH_CACHE_PATH
+              value: /cache/twitch-cache.json
+            - name: CONFIG_PATH
+              value: /config/config.json
+            - name: DISCORD_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: samousse-secret
+                  key: discord_token
+            - name: TWITCH_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: samousse-secret
+                  key: twitch_client_id
+            - name: TWITCH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: samousse-secret
+                  key: twitch_client_secret
+            - name: TWITCH_ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: samousse-secret
+                  key: twitch_access_token
+            - name: TWITCH_REFRESH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: samousse-secret
+                  key: twitch_refresh_token
+          volumeMounts:
+            - mountPath: /config
+              name: samousse-vol-config
+              readOnly: true
+            - mountPath: /cache
+              name: samousse-vol
