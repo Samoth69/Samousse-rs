@@ -125,14 +125,53 @@ async fn event_handler(
         }
         serenity::FullEvent::VoiceStateUpdate { old, new } => {
             trace!("VoiceStateUpdate {:?} -> {:?}", old, new);
-            let mut data = framework.user_data.twitch.write().await;
-            match data.users.get_mut(&new.user_id) {
-                Some(user) => {
-                    user.has_been_part_of_voice_state_event = true;
-                    user.current_channel_id = new.channel_id;
-                    
+            let mut is_known_user = false;
+            {
+                let mut data = framework.user_data.twitch.write().await;
+                match data.users.get_mut(&new.user_id) {
+                    Some(user) => {
+                        is_known_user = true;
+                        user.has_been_part_of_voice_state_event = true;
+                        user.current_channel_id = new.channel_id;
+                    }
+                    None => trace!("User {} isn't monitored", new.user_id),
                 }
-                None => trace!("User {} isn't monitored", new.user_id),
+            }
+            if is_known_user {
+                let twitch = framework.user_data.twitch.clone();
+                let is_streaming: Option<bool> = twitch
+                    .read()
+                    .await
+                    .users
+                    .get(&new.user_id)
+                    .map_or_else(|| None, |v| v.twitch_is_streaming);
+                if let Some(is_streaming) = is_streaming {
+                    if is_streaming {
+                        if let Some(old) = old {
+                            if let Some(channel_id) = old.channel_id {
+                                // We want to rename the old channel back
+                                rename_channel(
+                                    ctx,
+                                    twitch.clone(),
+                                    &old.user_id,
+                                    &channel_id,
+                                    false,
+                                )
+                                .await?;
+                            }
+                        }
+                        if let Some(channel_id) = new.channel_id {
+                            rename_channel(
+                                ctx,
+                                twitch.clone(),
+                                &new.user_id,
+                                &channel_id,
+                                is_streaming,
+                            )
+                            .await?;
+                        }
+                    }
+                }
             }
         }
         _ => {}
@@ -205,7 +244,13 @@ async fn handle_stream_event(
         None => warn!("Unknown user {:?} from twitch side", streamer_user_id),
     }
     if let Some(discord_user_id) = discord_user_id {
-        rename_channel(ctx, twitch, &discord_user_id, is_streaming).await?;
+        if let Some(channel_id) =
+            find_current_user_voice_channel(ctx, twitch.clone(), &discord_user_id).await?
+        {
+            rename_channel(ctx, twitch, &discord_user_id, &channel_id, is_streaming).await?;
+        } else {
+            debug!("Discord user {} not found in channel", discord_user_id);
+        }
     } else {
         return Err(anyhow!("Unknown twitch user id {}", streamer_user_id));
     }
@@ -254,78 +299,71 @@ async fn get_channel_new_name<'a>(
     ctx: &'a serenity::Context,
     twitch: Arc<RwLock<DiscordTwitchWatcher>>,
     discord_user_id: &'a UserId,
+    channel_id: &ChannelId,
     is_streaming: bool,
 ) -> anyhow::Result<Option<(ChannelId, EditChannel<'a>, Option<String>)>> {
-    let name: String;
-    if let Some(channel_id) =
-        find_current_user_voice_channel(ctx, twitch.clone(), discord_user_id).await?
+    // will be true if the channel has already been renamed
+    let channel_has_been_renamed = twitch.read().await.channels.contains_key(channel_id);
+
+    if twitch
+        .read()
+        .await
+        .find_user_in_channel(*channel_id)
+        .iter()
+        .filter(|f| f.twitch_is_streaming.is_some_and(|a| a) && channel_has_been_renamed)
+        .count()
+        >= 1
     {
-        trace!("Channel id {} found in data", channel_id);
-        // will be true if the channel has already been renamed
-        let channel_has_been_renamed = twitch.read().await.channels.contains_key(&channel_id);
-        if twitch
-            .read()
-            .await
-            .find_user_in_channel(channel_id)
-            .iter()
-            .filter(|f| f.twitch_is_streaming.is_some_and(|a| a) && channel_has_been_renamed)
-            .count()
-            >= 1
-        {
-            debug!("We do not change channel name, more than one streamer are in this channel");
+        debug!("We do not change channel name, more than one streamer are in this channel");
+        return Ok(None);
+    } else if is_streaming {
+        if let Some(channel) = twitch.read().await.channels.get(channel_id) {
+            info!(
+                "Channel {} is already marked has streaming",
+                channel.original_name
+            );
             return Ok(None);
-        } else if is_streaming {
-            if let Some(channel) = twitch.read().await.channels.get(&channel_id) {
-                info!(
-                    "Channel {} is already marked has streaming",
-                    channel.original_name
-                );
-                return Ok(None);
-            }
-        } else {
-            trace!("Going to rename channel {}", channel_id);
         }
-
-        trace!("before write lock");
-        let mut writer = twitch.write().await;
-        trace!("write lock acquired");
-        if let Some(discord_channel) = ctx.cache.channel(channel_id) {
-            trace!("Discord channel exist in ctx cache");
-
-            if is_streaming {
-                let to_insert = Channel {
-                    original_name: discord_channel.name.clone(),
-                };
-                writer.channels.insert(channel_id, to_insert);
-                name = writer.renamed_channel_name.clone();
-            } else {
-                let to_restore = writer.channels.remove(&channel_id).unwrap();
-                name = to_restore.original_name;
-            }
-
-            let reason = match is_streaming {
-                true => format!("User {} is streaming", discord_user_id),
-                false => format!("User {} has stopped his stream", discord_user_id),
-            };
-            let edit_channel = EditChannel::new().name(name);
-
-            return Ok(Some((channel_id, edit_channel, Some(reason))));
-        }
-        return Err(anyhow!("Channel {} doesn't exist", channel_id));
     } else {
-        warn!("Discord user {} not found in channel", discord_user_id);
+        trace!("Going to rename channel {}", channel_id);
     }
-    Ok(None)
+
+    trace!("before write lock");
+    let mut writer = twitch.write().await;
+    trace!("write lock acquired");
+    if let Some(discord_channel) = ctx.cache.channel(channel_id) {
+        trace!("Discord channel exist in ctx cache");
+        let name = if is_streaming {
+            let to_insert = Channel {
+                original_name: discord_channel.name.clone(),
+            };
+            writer.channels.insert(*channel_id, to_insert);
+            writer.renamed_channel_name.clone()
+        } else {
+            let to_restore = writer.channels.remove(channel_id).unwrap();
+            to_restore.original_name
+        };
+
+        let reason = match is_streaming {
+            true => format!("User {} is streaming", discord_user_id),
+            false => format!("User {} has stopped his stream", discord_user_id),
+        };
+        let edit_channel = EditChannel::new().name(name);
+
+        return Ok(Some((*channel_id, edit_channel, Some(reason))));
+    }
+    Err(anyhow!("Channel {} doesn't exist", channel_id))
 }
 
 async fn rename_channel(
     ctx: &serenity::Context,
     twitch: Arc<RwLock<DiscordTwitchWatcher>>,
     discord_user_id: &UserId,
+    channel_id: &ChannelId,
     is_streaming: bool,
 ) -> anyhow::Result<()> {
     debug!("Renaming channel");
-    match get_channel_new_name(ctx, twitch, discord_user_id, is_streaming).await? {
+    match get_channel_new_name(ctx, twitch, discord_user_id, channel_id, is_streaming).await? {
         Some((a, b, c)) => {
             debug!("Editing channel {:?} {:?} {:?}", a, b, c);
             if let Err(why) = ctx.http.edit_channel(a, &b, c.as_deref()).await {

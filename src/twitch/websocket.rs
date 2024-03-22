@@ -6,14 +6,13 @@ use anyhow::Context;
 use futures::{stream, TryStreamExt};
 use tokio::sync::mpsc::Sender;
 use tokio::time::sleep;
-use tracing::{debug, error, info, trace, warn, Instrument};
+use tracing::{debug, error, info, trace, warn};
 use twitch_api::client::ClientDefault;
 use twitch_api::eventsub::stream::{StreamOfflineV1, StreamOnlineV1};
 use twitch_api::eventsub::{
-    Event, EventSubSubscription, EventSubscription, EventType, EventsubWebsocketData, Message,
-    ReconnectPayload, SessionData, WelcomePayload,
+    Event, EventSubSubscription, EventType, EventsubWebsocketData, Message, ReconnectPayload,
+    SessionData, WelcomePayload,
 };
-use twitch_api::helix::eventsub::EventSubSubscriptions;
 use twitch_api::types::{EventSubId, UserId, UserName};
 use twitch_api::{eventsub, HelixClient};
 use twitch_oauth2::UserToken;
@@ -41,9 +40,9 @@ pub async fn run(sender: Sender<InterComm>, config: &TwitchWatcher) -> anyhow::R
         event_sub_id: vec![],
     };
 
-    ws.run().await?;
-
-    Ok(())
+    loop {
+        ws.run().await?;
+    }
 }
 
 #[derive(Clone)]
@@ -109,6 +108,7 @@ impl WebsocketClient {
                 else => {
                     warn!("Twitch websocket loop exited, waiting before restart");
                     sleep(Duration::from_secs(30)).await;
+                    return Ok(());
                 }
             )
         }
