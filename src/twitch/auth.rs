@@ -29,25 +29,36 @@ impl TwitchToken {
 
         let http_client = reqwest::Client::new();
 
-        let cache = serde_json::from_str::<TwitchToken>(
-            &fs::read_to_string(&config_path).unwrap_or(String::from("{}")),
-        );
+        let mut twitch_token =
+            serde_json::from_str::<TwitchToken>(&fs::read_to_string(&config_path).unwrap_or(
+                String::from("{\"access_token\":\"\",\"refresh_token\":\"\"}"),
+            ))?;
 
-        if let Ok(fi) = cache {
-            debug!("Loaded TwitchToken file, checking validity");
-            let res = http_client
-                .get("https://id.twitch.tv/oauth2/validate")
-                .header(
-                    header::AUTHORIZATION,
-                    "Bearer ".to_owned() + &fi.access_token,
-                )
-                .send()
-                .await?;
-            if res.status() == StatusCode::OK {
-                debug!("Token is valid");
-                return Ok(fi);
+        if twitch_token.access_token.is_empty() {
+            if let Ok(env) = var("TWITCH_ACCESS_TOKEN") {
+                twitch_token.access_token = env;
+                info!("Filled access token from env vars");
             }
+        }
+        if twitch_token.refresh_token.is_empty() {
+            if let Ok(env) = var("TWITCH_REFRESH_TOKEN") {
+                twitch_token.refresh_token = env;
+                info!("Filled refresh token from env vars");
+            }
+        }
 
+        debug!("Loaded TwitchToken file, checking validity");
+        let res = http_client
+            .get("https://id.twitch.tv/oauth2/validate")
+            .header(
+                header::AUTHORIZATION,
+                "Bearer ".to_owned() + &twitch_token.access_token,
+            )
+            .send()
+            .await?;
+        if res.status() == StatusCode::OK {
+            debug!("Token is valid");
+        } else {
             info!("Token expired, trying to logging");
             let res = http_client
                 .post("https://id.twitch.tv/oauth2/token")
@@ -55,7 +66,7 @@ impl TwitchToken {
                     ("client_id", cred.0),
                     ("client_secret", cred.1),
                     ("grant_type", String::from("refresh_token")),
-                    ("refresh_token", fi.refresh_token),
+                    ("refresh_token", twitch_token.refresh_token),
                 ])
                 .send()
                 .await?;
@@ -64,13 +75,12 @@ impl TwitchToken {
                 panic!("Auth failed");
             }
 
-            let new_token = res.json::<TwitchToken>().await?;
-
-            let mut fi = File::create(&config_path)?;
-            fi.write_all(serde_json::to_string(&new_token)?.as_bytes())?;
-
-            return Ok(new_token);
+            twitch_token = res.json::<TwitchToken>().await?;
         }
-        Err(anyhow!("Login failed"))
+
+        let mut fi = File::create(&config_path)?;
+        fi.write_all(serde_json::to_string(&twitch_token)?.as_bytes())?;
+
+        Ok(twitch_token)
     }
 }

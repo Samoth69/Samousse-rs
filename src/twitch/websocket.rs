@@ -29,7 +29,9 @@ pub async fn run(sender: Sender<InterComm>, config: &TwitchWatcher) -> anyhow::R
     let mut ws = WebsocketClient {
         sender,
         session_id: None,
-        token: TwitchToken::new().await?,
+        token: TwitchToken::new()
+            .await
+            .expect("Error on loading token file"),
         client: twitch_client,
         user_ids: config
             .channels

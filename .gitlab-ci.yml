@@ -1,0 +1,46 @@
+default:
+  tags:
+    - GitlabRunnerAlpha
+
+variables:
+  CARGO_HOME: ${CI_PROJECT_DIR}/.cargo # Move cargo data into the project
+  # directory so it can be cached
+
+stages:
+  - build
+  - deploy
+
+Build app:
+  image: catthehacker/ubuntu:rust-latest
+  stage: build
+  script:
+    - docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin <<< $CI_REGISTRY_PASSWORD
+    - cargo build --release
+    - >
+      if [[ ! -z "${CI_COMMIT_TAG}" ]]; then
+        docker build --no-cache -t $TAGGED_REGISTRY_IMAGE .
+        docker push $TAGGED_REGISTRY_IMAGE
+      else
+        docker build --no-cache -t $DEFAULT_REGISTRY_IMAGE .
+        docker push $DEFAULT_REGISTRY_IMAGE
+      fi
+  variables:
+    TAGGED_REGISTRY_IMAGE: $CI_REGISTRY_IMAGE/app:$CI_COMMIT_TAG
+    DEFAULT_REGISTRY_IMAGE: $CI_REGISTRY_IMAGE/app
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}  # Share cache between all jobs on one branch/tag
+    paths:
+      - .cargo/registry/index
+      - .cargo/registry/cache
+    policy: pull-push
+
+#deploy:
+#  image: gitlab-registry.k3s.samoth.eu/automatisations/custom-images/kubernetes:latest
+#  stage: deploy
+#  script:
+#    - cd kubernetes
+#    - kustomize edit set image gitlab-registry.k3s.samoth.eu/github/qbtstalker/dbmate:$CI_COMMIT_TAG
+#    - kustomize edit set image gitlab-registry.k3s.samoth.eu/github/qbtstalker/app:$CI_COMMIT_TAG
+#    - kustomize build | kubectl --kubeconfig="$KUBECONFIG" apply -n qbt-stalker -f -
+#  rules:
+#    - if: '$CI_COMMIT_TAG != null'
