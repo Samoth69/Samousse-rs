@@ -9,10 +9,12 @@ use tokio::sync::{Mutex, RwLock};
 use crate::inter_comm::InterComm;
 
 pub mod bot;
+mod twitch;
+mod random_stuff;
 
 // Types used by all command functions
 type Error = Box<dyn std::error::Error + Send + Sync>;
-type Context<'a> = poise::Context<'a, Data, Error>;
+type DiscordContext<'a> = poise::Context<'a, Data, Error>;
 
 #[derive(Debug)]
 struct Data {
@@ -21,6 +23,8 @@ struct Data {
     pub sender: Mutex<Sender<InterComm>>,
     pub receiver: Mutex<Option<Receiver<InterComm>>>,
     pub activity_messages: Vec<String>,
+    pub question_answers: Vec<String>,
+    pub random_answers: Vec<String>,
 }
 
 #[derive(Debug)]

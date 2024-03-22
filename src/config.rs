@@ -18,6 +18,8 @@ pub struct TwitchWatcher {
 #[derive(Deserialize, Clone, Debug)]
 pub struct Config {
     pub activity_messages: Vec<String>,
+    pub question_answers: Vec<String>,
+    pub random_answers: Vec<String>,
     pub trusted_users: Vec<u64>,
     pub twitch_watcher: TwitchWatcher,
 }
