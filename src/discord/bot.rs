@@ -22,7 +22,7 @@ use crate::inter_comm::InterComm;
 pub async fn run(
     sender: Sender<InterComm>,
     receiver: Receiver<InterComm>,
-    config: &Config,
+    config: Arc<Config>,
 ) -> Result<(), Error> {
     let discord_token = var("DISCORD_TOKEN").expect("Missing DISCORD_TOKEN");
 
@@ -55,7 +55,7 @@ pub async fn run(
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 let mut users: HashMap<UserId, User> = HashMap::new();
-                for m in config.twitch_watcher.channels {
+                for m in &config.twitch_watcher.channels {
                     users.insert(
                         UserId::from(m.discord_id),
                         User {
@@ -68,11 +68,11 @@ pub async fn run(
                     );
                 }
                 Ok(Data {
-                    trusted_users_ids: Arc::new(config.trusted_users),
+                    trusted_users_ids: Arc::new(config.trusted_users.clone()),
                     twitch: Arc::new(RwLock::new(DiscordTwitchWatcher {
                         channels: HashMap::new(),
                         users,
-                        renamed_channel_name: config.twitch_watcher.renamed_channel_name,
+                        renamed_channel_name: config.twitch_watcher.renamed_channel_name.clone(),
                         enabled: config.twitch_watcher.enabled,
                         servers: config
                             .twitch_watcher
@@ -83,9 +83,9 @@ pub async fn run(
                     })),
                     receiver: Mutex::new(Some(receiver)),
                     sender: Mutex::new(sender),
-                    activity_messages: config.activity_messages,
-                    question_answers: Arc::new(config.question_answers),
-                    random_answers: Arc::new(config.random_answers),
+                    activity_messages: config.activity_messages.clone(),
+                    question_answers: Arc::new(config.question_answers.clone()),
+                    random_answers: Arc::new(config.random_answers.clone()),
                 })
             })
         })

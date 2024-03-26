@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -17,11 +18,11 @@ use twitch_api::types::{EventSubId, UserId, UserName};
 use twitch_api::{eventsub, HelixClient};
 use twitch_oauth2::UserToken;
 
-use crate::config::TwitchWatcher;
+use crate::config::{Config, TwitchWatcher};
 use crate::inter_comm::{InterComm, MessageType};
 use crate::twitch::auth::{get_client_ids, TwitchToken};
 
-pub async fn run(sender: Sender<InterComm>, config: &TwitchWatcher) -> anyhow::Result<()> {
+pub async fn run(sender: Sender<InterComm>, config: Arc<Config>) -> anyhow::Result<()> {
     let twitch_client: HelixClient<_> = HelixClient::with_client(
         <reqwest::Client>::default_client_with_name(Some("samousse-rs".parse()?))?,
     );
@@ -34,6 +35,7 @@ pub async fn run(sender: Sender<InterComm>, config: &TwitchWatcher) -> anyhow::R
             .expect("Error on loading token file"),
         client: twitch_client,
         user_ids: config
+            .twitch_watcher
             .channels
             .iter()
             .map(|i| UserId::new(i.twitch_channel_id.to_string()))
