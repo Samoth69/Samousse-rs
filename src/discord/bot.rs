@@ -22,7 +22,7 @@ use crate::inter_comm::InterComm;
 pub async fn run(
     sender: Sender<InterComm>,
     receiver: Receiver<InterComm>,
-    config: Arc<Config>,
+    config: &Config,
 ) -> Result<(), Error> {
     let discord_token = var("DISCORD_TOKEN").expect("Missing DISCORD_TOKEN");
 
@@ -64,6 +64,7 @@ pub async fn run(
                             current_channel_id: None,
                             twitch_is_streaming: None,
                             has_been_part_of_voice_state_event: false,
+                            last_twitch_is_streaming_update: None,
                         },
                     );
                 }

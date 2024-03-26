@@ -47,7 +47,7 @@ spec:
               name: samousse-vol
       containers:
         - name: samousse
-          image: gitlab-registry.k3s.samoth.eu/github/samousse-rs/app:0.1.0
+          image: gitlab-registry.k3s.samoth.eu/github/samousse-rs/app:0.1.1
           env:
             - name: RUST_LOG
               value: info

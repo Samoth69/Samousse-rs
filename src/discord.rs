@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use poise::serenity_prelude as serenity;
 use serenity::all::{ChannelId, GuildId, UserId};
@@ -55,6 +56,19 @@ struct User {
     pub has_been_part_of_voice_state_event: bool,
     pub twitch_id: u64,
     pub twitch_is_streaming: Option<bool>,
+    // last time twitch_is_streaming has been updated
+    pub last_twitch_is_streaming_update: Option<SystemTime>,
+}
+
+impl User {
+    /// helper function to update twitch_is_streaming and tied value last_twitch_is_streaming
+    /// if the current value is the same as new_value, last_twitch_is_streaming_update will not be updated
+    pub fn set_twitch_is_streaming(&mut self, new_value: Option<bool>) {
+        if self.twitch_is_streaming != new_value {
+            self.twitch_is_streaming = new_value;
+            self.last_twitch_is_streaming_update = Some(SystemTime::now());
+        }
+    }
 }
 
 impl DiscordTwitchWatcher {

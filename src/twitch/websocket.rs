@@ -22,7 +22,7 @@ use crate::config::{Config, TwitchWatcher};
 use crate::inter_comm::{InterComm, MessageType};
 use crate::twitch::auth::{get_client_ids, TwitchToken};
 
-pub async fn run(sender: Sender<InterComm>, config: Arc<Config>) -> anyhow::Result<()> {
+pub async fn run(sender: Sender<InterComm>, config: &Config) -> anyhow::Result<()> {
     let twitch_client: HelixClient<_> = HelixClient::with_client(
         <reqwest::Client>::default_client_with_name(Some("samousse-rs".parse()?))?,
     );

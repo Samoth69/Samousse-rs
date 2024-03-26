@@ -1,8 +1,10 @@
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use anyhow::anyhow;
 use poise::serenity_prelude as serenity;
 use serenity::all::{ChannelId, EditChannel, UserId};
+use serenity::http::Route;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, trace, warn};
@@ -204,6 +206,30 @@ pub async fn rename_channel(
     match get_channel_new_name(ctx, twitch, discord_user_id, channel_id, is_streaming).await? {
         Some((a, b, c)) => {
             debug!("Editing channel {:?} {:?} {:?}", a, b, c);
+            if let Some(ratelimiter) = &ctx.http.ratelimiter {
+                let routes = ratelimiter.routes();
+                let reader = routes.read().await;
+
+                let route = Route::Channel { channel_id: a };
+                if let Some(route) = reader.get(&route.ratelimiting_bucket()) {
+                    debug!("--------");
+                    debug!("limit: {:?}", route.lock().await.limit());
+                    debug!("remaining: {:?}", route.lock().await.remaining());
+                    if let Some(reset) = route.lock().await.reset() {
+                        debug!(
+                            "reset: {}",
+                            reset
+                                .duration_since(SystemTime::UNIX_EPOCH)
+                                .unwrap()
+                                .as_secs()
+                        );
+                    }
+                    if let Some(reset) = route.lock().await.reset_after() {
+                        debug!("reset after: {:?}", reset);
+                    }
+                    debug!("--------");
+                }
+            }
             if let Err(why) = ctx.http.edit_channel(a, &b, c.as_deref()).await {
                 error!("Error on channel rename {}", why);
             } else {
